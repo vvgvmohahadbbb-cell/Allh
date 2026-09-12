@@ -8,9 +8,9 @@ import android.os.Build
 import java.util.Calendar
 
 /**
- * يجدول كل منبهات الصلاة + منبّه "صلي على النبي" كل ١٠ دقايق عبر
- * AlarmManager - هاي منبهات محلية بالكامل، بتشتغل حتى لو التطبيق
- * مقفول تماماً وبدون أي اتصال إنترنت.
+ * يجدول كل منبهات الصلاة + منبّه "صلِّ على النبي" عبر AlarmManager - منبهات
+ * محلية بالكامل، بتشتغل حتى لو التطبيق مقفول تماماً وبدون أي اتصال إنترنت.
+ * تدعم تعديل يدوي (بالدقائق) لكل صلاة، وفترة مخصصة لتذكير الصلاة على النبي.
  */
 object AlarmScheduler {
 
@@ -23,8 +23,6 @@ object AlarmScheduler {
     private const val REQ_SALAWAT = 2001
     private const val REQ_RESCHEDULE = 3001
 
-    private const val SALAWAT_INTERVAL_MS = 10 * 60 * 1000L
-
     fun scheduleAll(context: Context) {
         val prefs = context.getSharedPreferences("almanara_prefs", Context.MODE_PRIVATE)
         val lat = prefs.getFloat("lat", Float.NaN)
@@ -35,25 +33,49 @@ object AlarmScheduler {
         val timezone = cal.timeZone.rawOffset / (1000.0 * 60.0 * 60.0)
         val times = PrayerTimeCalculator.calculate(lat.toDouble(), lng.toDouble(), timezone, cal)
 
-        schedulePrayer(context, REQ_FAJR, times.fajr, "الفجر")
-        schedulePrayer(context, REQ_SUNRISE, times.sunrise, "الشروق")
-        schedulePrayer(context, REQ_DHUHR, times.dhuhr, "الظهر")
-        schedulePrayer(context, REQ_ASR, times.asr, "العصر")
-        schedulePrayer(context, REQ_MAGHRIB, times.maghrib, "المغرب")
-        schedulePrayer(context, REQ_ISHA, times.isha, "العشاء")
+        schedulePrayer(context, REQ_FAJR, times.fajr, "الفجر", "offset_fajr")
+        schedulePrayer(context, REQ_SUNRISE, times.sunrise, "الشروق", "offset_sunrise")
+        schedulePrayer(context, REQ_DHUHR, times.dhuhr, "الظهر", "offset_dhuhr")
+        schedulePrayer(context, REQ_ASR, times.asr, "العصر", "offset_asr")
+        schedulePrayer(context, REQ_MAGHRIB, times.maghrib, "المغرب", "offset_maghrib")
+        schedulePrayer(context, REQ_ISHA, times.isha, "العشاء", "offset_isha")
 
         scheduleMidnightReschedule(context)
-        scheduleSalawat(context)
+        if (prefs.getBoolean("salawat_enabled", true)) {
+            scheduleSalawat(context)
+        }
     }
 
-    private fun schedulePrayer(context: Context, requestCode: Int, decimalHour: Double, name: String) {
+    /** يرجع أوقات اليوم بعد تطبيق التعديلات اليدوية - تستخدمها الشاشة الرئيسية للعرض */
+    fun getAdjustedTimes(context: Context, lat: Double, lng: Double, cal: Calendar): Map<String, Double> {
+        val prefs = context.getSharedPreferences("almanara_prefs", Context.MODE_PRIVATE)
+        val timezone = cal.timeZone.rawOffset / (1000.0 * 60.0 * 60.0)
+        val times = PrayerTimeCalculator.calculate(lat, lng, timezone, cal)
+        fun adjusted(base: Double, key: String) = base + prefs.getInt(key, 0) / 60.0
+        return mapOf(
+            "الفجر" to adjusted(times.fajr, "offset_fajr"),
+            "الشروق" to adjusted(times.sunrise, "offset_sunrise"),
+            "الظهر" to adjusted(times.dhuhr, "offset_dhuhr"),
+            "العصر" to adjusted(times.asr, "offset_asr"),
+            "المغرب" to adjusted(times.maghrib, "offset_maghrib"),
+            "العشاء" to adjusted(times.isha, "offset_isha")
+        )
+    }
+
+    private fun schedulePrayer(
+        context: Context, requestCode: Int, baseDecimalHour: Double, name: String, offsetKey: String
+    ) {
+        val prefs = context.getSharedPreferences("almanara_prefs", Context.MODE_PRIVATE)
+        val offsetMinutes = prefs.getInt(offsetKey, 0)
+        val decimalHour = baseDecimalHour + offsetMinutes / 60.0
+
         val cal = Calendar.getInstance()
         val hour = decimalHour.toInt()
         val minute = ((decimalHour - hour) * 60).toInt()
         cal.set(Calendar.HOUR_OF_DAY, hour)
         cal.set(Calendar.MINUTE, minute)
         cal.set(Calendar.SECOND, 0)
-        if (cal.timeInMillis < System.currentTimeMillis()) return // الوقت فات اليوم، رح ينجدول بكرا تلقائياً
+        if (cal.timeInMillis < System.currentTimeMillis()) return
 
         val intent = Intent(context, PrayerAlarmReceiver::class.java)
         intent.putExtra("prayerName", name)
@@ -65,16 +87,33 @@ object AlarmScheduler {
     }
 
     private fun scheduleSalawat(context: Context) {
+        val prefs = context.getSharedPreferences("almanara_prefs", Context.MODE_PRIVATE)
+        val intervalMinutes = prefs.getInt("salawat_interval_min", 10)
         val intent = Intent(context, ReminderAlarmReceiver::class.java)
         val pending = PendingIntent.getBroadcast(
             context, REQ_SALAWAT, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        setExactAlarm(context, System.currentTimeMillis() + SALAWAT_INTERVAL_MS, pending)
+        val nextTime = System.currentTimeMillis() + intervalMinutes * 60 * 1000L
+        prefs.edit().putLong("salawat_next_time", nextTime).apply()
+        setExactAlarm(context, nextTime, pending)
     }
 
     fun rescheduleSalawatNext(context: Context) {
-        scheduleSalawat(context)
+        val prefs = context.getSharedPreferences("almanara_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("salawat_enabled", true)) {
+            scheduleSalawat(context)
+        }
+    }
+
+    fun cancelSalawat(context: Context) {
+        val intent = Intent(context, ReminderAlarmReceiver::class.java)
+        val pending = PendingIntent.getBroadcast(
+            context, REQ_SALAWAT, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(pending)
     }
 
     private fun scheduleMidnightReschedule(context: Context) {

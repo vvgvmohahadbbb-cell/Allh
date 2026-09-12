@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="❓ دليل أسئلة وأجوبة (محلي، بدون نت)"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/qaSearchInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="ابحث..."
+        android:textColorHint="#888888"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/qaRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/qaNewQuestion"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="سؤال جديد"
+        android:textColorHint="#888888"
+        android:textColor="#FFFFFF" />
+
+    <EditText
+        android:id="@+id/qaNewAnswer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="الإجابة"
+        android:textColorHint="#888888"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnAddQA"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="إضافة للدليل" />
+
+</LinearLayout>

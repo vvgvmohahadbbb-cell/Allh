@@ -12,11 +12,11 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 
-/** يشغّل ملف الأذان الكامل أو تذكير "صلي على النبي" لحد ما يخلص */
+/** يشغّل ملف الأذان الكامل أو تذكير "صلِّ على النبي صلى الله عليه وسلم" - صوت مسجّل بس، بدون رنين إشعار إضافي */
 class AdhanPlayerService : Service() {
 
     companion object {
-        private const val CHANNEL_ID = "adhan_channel"
+        private const val CHANNEL_ID = "adhan_channel_silent"
         private const val NOTIF_ID = 500
     }
 
@@ -29,8 +29,8 @@ class AdhanPlayerService : Service() {
         val isSalawat = intent?.getBooleanExtra("salawat", false) ?: false
         val prayerName = intent?.getStringExtra("prayerName") ?: ""
 
-        createChannel()
-        val title = if (isSalawat) "صلِّ على النبي ﷺ" else "حان وقت صلاة $prayerName"
+        createSilentChannel()
+        val title = if (isSalawat) "صلِّ على النبي صلى الله عليه وسلم" else "حان وقت صلاة $prayerName"
         startForeground(NOTIF_ID, buildNotification(title))
 
         acquireWakeLock()
@@ -53,12 +53,14 @@ class AdhanPlayerService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun createChannel() {
+    /** قناة إشعار بدون أي صوت نظام أو اهتزاز - الصوت يجي بس من ملف الأذان/الصلاة على النبي نفسه */
+    private fun createSilentChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            mgr.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "الأذان والتذكيرات", NotificationManager.IMPORTANCE_HIGH)
-            )
+            val channel = NotificationChannel(CHANNEL_ID, "الأذان والتذكيرات", NotificationManager.IMPORTANCE_LOW)
+            channel.setSound(null, null)
+            channel.enableVibration(false)
+            mgr.createNotificationChannel(channel)
         }
     }
 

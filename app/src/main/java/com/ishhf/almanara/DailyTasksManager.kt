@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-data class DailyTask(val id: String, val title: String, var done: Boolean, val custom: Boolean)
+data class DailyTask(val id: String, val title: String, var done: Boolean, val custom: Boolean, val contentType: String? = null)
 
 /**
  * قائمة مهام يومية روحية (أذكار، تسبيح، شكر...) تتصفّر كل يوم جديد،
@@ -16,14 +16,15 @@ data class DailyTask(val id: String, val title: String, var done: Boolean, val c
  */
 object DailyTasksManager {
 
+    // (العنوان، نوع المحتوى القابل للفتح - null يعني مجرد صندوق اختيار عادي)
     private val defaultTasks = listOf(
-        "أذكار الصباح",
-        "أذكار المساء",
-        "١٠٠ تسبيحة (سبحان الله وبحمده)",
-        "الاستغفار ١٠٠ مرة",
-        "الحمد لله والشكر على نعمه",
-        "قراءة ورد من القرآن",
-        "الصلاة على النبي ﷺ"
+        "أذكار الصباح" to "morning",
+        "أذكار المساء" to "evening",
+        "١٠٠ تسبيحة (سبحان الله وبحمده)" to null,
+        "الاستغفار ١٠٠ مرة" to null,
+        "الحمد لله والشكر على نعمه" to null,
+        "قراءة ورد من القرآن" to null,
+        "الصلاة على النبي صلى الله عليه وسلم" to null
     )
 
     fun getTodayTasks(context: Context): List<DailyTask> {
@@ -32,18 +33,20 @@ object DailyTasksManager {
         val lastDate = prefs.getString("tasks_date", "")
 
         val customTitles = loadCustomTitles(prefs)
-        val allTitles = defaultTasks + customTitles
 
         if (lastDate != today) {
-            // يوم جديد: نصفّر حالة الإنجاز بس نحافظ على قائمة المهام المخصصة
-            val fresh = allTitles.mapIndexed { i, title ->
-                DailyTask(i.toString(), title, false, i >= defaultTasks.size)
+            val fresh = mutableListOf<DailyTask>()
+            defaultTasks.forEachIndexed { i, (title, type) ->
+                fresh.add(DailyTask(i.toString(), title, false, false, type))
+            }
+            customTitles.forEachIndexed { i, title ->
+                fresh.add(DailyTask((defaultTasks.size + i).toString(), title, false, true, null))
             }
             saveTasks(prefs, fresh, today)
             return fresh
         }
 
-        return loadTasks(prefs, allTitles)
+        return loadTasks(prefs)
     }
 
     fun toggleTask(context: Context, taskId: String) {
@@ -61,7 +64,6 @@ object DailyTasksManager {
         val customTitles = loadCustomTitles(prefs).toMutableList()
         customTitles.add(title)
         saveCustomTitles(prefs, customTitles)
-        // نجبر إعادة بناء القائمة عشان المهمة الجديدة تنضاف فوراً
         prefs.edit().putString("tasks_date", "").apply()
     }
 
@@ -85,6 +87,7 @@ object DailyTasksManager {
             obj.put("title", t.title)
             obj.put("done", t.done)
             obj.put("custom", t.custom)
+            obj.put("contentType", t.contentType ?: JSONObject.NULL)
             arr.put(obj)
         }
         prefs.edit()
@@ -93,14 +96,15 @@ object DailyTasksManager {
             .apply()
     }
 
-    private fun loadTasks(prefs: android.content.SharedPreferences, fallbackTitles: List<String>): List<DailyTask> {
-        val raw = prefs.getString("tasks_today", null) ?: return fallbackTitles.mapIndexed { i, t ->
-            DailyTask(i.toString(), t, false, false)
-        }
+    private fun loadTasks(prefs: android.content.SharedPreferences): List<DailyTask> {
+        val raw = prefs.getString("tasks_today", null) ?: return emptyList()
         val arr = JSONArray(raw)
         return (0 until arr.length()).map { i ->
             val obj = arr.getJSONObject(i)
-            DailyTask(obj.getString("id"), obj.getString("title"), obj.getBoolean("done"), obj.getBoolean("custom"))
+            DailyTask(
+                obj.getString("id"), obj.getString("title"), obj.getBoolean("done"), obj.getBoolean("custom"),
+                if (obj.isNull("contentType")) null else obj.getString("contentType")
+            )
         }
     }
 

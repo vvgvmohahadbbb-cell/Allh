@@ -4,12 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-/** يستقبل منبّه "صلي على النبي" كل ١٠ دقايق، ويعيد جدولة نفسه للمرة الجاية */
+/** يستقبل منبّه "صلِّ على النبي"، ويعيد جدولة نفسه للمرة الجاية (إذا لسا مفعّل) */
 class ReminderAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val serviceIntent = Intent(context, AdhanPlayerService::class.java)
-        serviceIntent.putExtra("salawat", true)
-        context.startService(serviceIntent)
+        val prefs = context.getSharedPreferences("almanara_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("salawat_enabled", true)) {
+            val serviceIntent = Intent(context, AdhanPlayerService::class.java)
+            serviceIntent.putExtra("salawat", true)
+            context.startService(serviceIntent)
+        }
         AlarmScheduler.rescheduleSalawatNext(context)
     }
 }
